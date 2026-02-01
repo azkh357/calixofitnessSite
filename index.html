@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CalixOlympics – Track diet and activity, set goals with Calixo, and get AI-powered suggestions.">
-  <title>CalixOlympics – Diet & Activity</title>
+  <meta name="description" content="CalixOlympics – AI-powered diet & activity coach. Voice logging, goal discussion with Calixo, photo nutrition, and personalized suggestions.">
+  <title>CalixOlympics – Winter Edition · Diet & Activity Coach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
   <div class="app">
     <header class="header">
       <div class="header-top">
-        <div>
+        <div class="header-brand">
           <h1>CalixOlympics</h1>
-          <p class="tagline">Diet & activity in one place</p>
+          <p class="tagline">Track food & activity. Chat with Calixo. Get suggestions that fit your goals.</p>
         </div>
         <button type="button" class="btn btn-stop-audio hidden" id="stop-audio-btn" title="Stop playback" aria-label="Stop playback">
           <svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>
@@ -39,17 +39,17 @@
 
     <main class="main">
       <section class="tab-panel active" id="dashboard" role="tabpanel" aria-labelledby="nav-dashboard">
-        <h2 class="panel-title">Today’s overview</h2>
+        <h2 class="panel-title">Overview</h2>
         <div class="date-display" id="dashboard-date"></div>
         <div class="daily-goal-banner" id="daily-goal-banner">
           <div class="daily-goal-banner-header">
-            <h3>Today’s goal to reach</h3>
+            <h3>Daily goal</h3>
             <div class="daily-goal-banner-actions">
               <button type="button" class="btn btn-voice" id="voice-briefing-btn" title="Get a personalized coach briefing">
                 <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                 <span class="btn-voice-label">Coach Briefing</span>
               </button>
-              <button type="button" class="btn btn-voice" id="voice-dashboard-btn" title="Read today’s summary aloud">
+              <button type="button" class="btn btn-voice" id="voice-dashboard-btn" title="Read summary aloud">
                 <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                 <span class="btn-voice-label">Read summary</span>
               </button>
@@ -310,6 +310,10 @@
       </div>
       <p class="chat-status" id="chat-status"></p>
     </aside>
+
+    <footer class="app-footer" role="contentinfo">
+      <p>Built with OpenRouter & ElevenLabs</p>
+    </footer>
   </div>
   <script src="script.js"></script>
 </body>

@@ -164,15 +164,12 @@ function sumActivityCaloriesBurned(entries) {
 function formatDate(dateStr) {
   const [y, m, day] = dateStr.split("-").map(Number);
   const d = new Date(y, m - 1, day);
-  const today = getToday();
-  const isToday = dateStr === today;
-  const formatted = d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric"
   });
-  return isToday ? "Today, " + formatted : formatted;
 }
 
 const activityTypeLabels = {
@@ -238,7 +235,7 @@ function getSuggestions(data) {
 
   if (dietEntries.length === 0 && activityEntries.length === 0) {
     suggestions.push({
-      text: "Log some food and activity today so we can give you personalized suggestions.",
+      text: "Try the Talk or Food tab to get started. Once you log something, you'll see personalized suggestions here.",
       type: "info"
     });
     return suggestions;
@@ -252,12 +249,12 @@ function getSuggestions(data) {
       });
     } else if (totals.calories > goals.calorieGoal * 1.2) {
       suggestions.push({
-        text: `Calories are above your goal today. Try lighter options at your next meal or add a bit more activity to balance.`,
+        text: `Calories are above your goal. Try lighter options at your next meal or add a bit more activity to balance.`,
         type: "warning"
       });
     } else {
       suggestions.push({
-        text: "Your calorie intake today looks on track. Keep it up.",
+        text: "Your calorie intake looks on track. Keep it up.",
         type: "success"
       });
     }
@@ -283,7 +280,7 @@ function getSuggestions(data) {
       });
     } else {
       suggestions.push({
-        text: `You've hit ${activeMinutes} active minutes today. Meeting your ${goals.activityGoal}-minute goal supports heart health and energy.`,
+        text: `You've hit your activity goal (${activeMinutes} min). That supports heart health and energy.`,
         type: "success"
       });
     }
@@ -352,8 +349,10 @@ function renderDashboard(data) {
     .slice(0, 5);
 
   const recentEl = document.getElementById("recent-list");
+  const welcomeEl = document.getElementById("dashboard-welcome");
+  if (welcomeEl) welcomeEl.classList.toggle("hidden", recent.length > 0);
   if (recent.length === 0) {
-    recentEl.innerHTML = '<li class="empty-state">No entries today yet. Log food or activity to see them here.</li>';
+    recentEl.innerHTML = '<li class="empty-state">Your recent food and activity will show here. Try the <strong>Food</strong> or <strong>Talk</strong> tab to get started.</li>';
   } else {
     recentEl.innerHTML = recent
       .map((r) => `<li>${r.text}</li>`)
@@ -367,7 +366,7 @@ function renderDietEntries(data) {
   const today = getToday();
 
   if (entries.length === 0) {
-    el.innerHTML = '<li class="empty-state">No food logged today.</li>';
+    el.innerHTML = '<li class="empty-state">Add your first meal—use the form above or say it in the <strong>Talk</strong> tab.</li>';
     return;
   }
 
@@ -434,7 +433,7 @@ function renderActivityEntries(data) {
 function renderSuggestionsInto(listEl, suggestions) {
   if (!listEl) return;
   if (!suggestions || suggestions.length === 0) {
-    listEl.innerHTML = '<li class="empty-state">Log some food and activity to get suggestions.</li>';
+    listEl.innerHTML = '<li class="empty-state">Log some food and activity, then come back—Calixo will give you personalized suggestions here.</li>';
     return;
   }
   listEl.innerHTML = suggestions
@@ -519,7 +518,6 @@ function initTabs() {
       if (panel) {
         panel.classList.add("active");
         panel.setAttribute("aria-hidden", "false");
-        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
       if (tabId === "goals") ensureGoalsChatSeeded();
       if (tabId === "talk-calixo") ensureTalkCalixoSeeded();
@@ -1055,6 +1053,7 @@ function syncFromServer() {
 /* ElevenLabs voice: read text aloud, with stop control */
 let currentPlayingAudio = null;
 let currentVoiceButton = null;
+let currentPlaybackEndCallback = null;
 
 function stopCurrentAudio() {
   if (currentPlayingAudio) {
@@ -1065,15 +1064,20 @@ function stopCurrentAudio() {
     currentPlayingAudio = null;
   }
   if (currentVoiceButton) {
-    const labelEl = currentVoiceButton.querySelector(".btn-voice-label");
+    const labelEl = currentVoiceButton.querySelector(".btn-voice-label") || currentVoiceButton.querySelector(".talk-calixo-mic-label");
     const orig = currentVoiceButton.dataset.originalText;
-    if (labelEl) labelEl.textContent = orig || "Read aloud";
-    else currentVoiceButton.textContent = orig || "Read aloud";
+    if (labelEl) labelEl.textContent = orig || "Tap to speak";
+    else currentVoiceButton.textContent = orig || "Tap to speak";
     currentVoiceButton.disabled = false;
     currentVoiceButton = null;
   }
   const stopBtn = document.getElementById("stop-audio-btn");
   if (stopBtn) stopBtn.classList.add("hidden");
+  if (currentPlaybackEndCallback) {
+    const fn = currentPlaybackEndCallback;
+    currentPlaybackEndCallback = null;
+    fn();
+  }
 }
 
 async function speakText(text, buttonEl, onPlaybackEnd) {
@@ -1106,6 +1110,7 @@ async function speakText(text, buttonEl, onPlaybackEnd) {
     const audio = new Audio(url);
     currentPlayingAudio = audio;
     currentVoiceButton = btn;
+    currentPlaybackEndCallback = typeof onPlaybackEnd === "function" ? onPlaybackEnd : null;
 
     const stopBtn = document.getElementById("stop-audio-btn");
     if (stopBtn) stopBtn.classList.remove("hidden");
@@ -1113,11 +1118,10 @@ async function speakText(text, buttonEl, onPlaybackEnd) {
     audio.onended = () => {
       URL.revokeObjectURL(url);
       stopCurrentAudio();
-      if (typeof onPlaybackEnd === "function") onPlaybackEnd();
     };
     audio.onerror = () => {
+      URL.revokeObjectURL(url);
       stopCurrentAudio();
-      if (typeof onPlaybackEnd === "function") onPlaybackEnd();
     };
     await audio.play();
   } catch (err) {
@@ -1147,11 +1151,11 @@ document.getElementById("voice-dashboard-btn").addEventListener("click", () => {
   const activeMinutes = sumActivityMinutes(activityEntries);
   const totalBurned = sumActivityCaloriesBurned(activityEntries);
   const summary = [
-    `Today is ${formatDate(today)}.`,
+    `${formatDate(today)}.`,
     `Calories: ${totals.calories} of ${goals.calorieGoal}. Protein: ${totals.protein} of ${goals.proteinGoal} grams.`,
     `Activity: ${activeMinutes} of ${goals.activityGoal} minutes. Calories burned from activity: about ${totalBurned}.`,
     dietEntries.length === 0 && activityEntries.length === 0
-      ? "No entries yet today. Log food or activity to track."
+      ? "No entries yet. Log food or activity to track."
       : `You have ${dietEntries.length} food entries and ${activityEntries.length} activity sessions.`
   ].join(" ");
   speakText(summary, document.getElementById("voice-dashboard-btn"));
@@ -1809,7 +1813,13 @@ setupChatMic("goals-chat-mic", "goals-chat-mic-label", "goals-chat-status", "goa
   const statusEl = document.getElementById("talk-calixo-status");
   const setButtonLabel = (text) => { if (labelEl) labelEl.textContent = text; };
   const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
-  const resetIdle = () => { setButtonLabel("Tap to speak"); micBtn.disabled = false; setStatus(""); };
+  const resetIdle = () => {
+    setButtonLabel("Tap to speak");
+    micBtn.disabled = false;
+    setStatus("");
+    voiceRecording.active = false;
+    voiceRecording.mode = null;
+  };
 
   if (!micBtn) return;
   micBtn.addEventListener("click", async function talkCalixoMicClick() {
@@ -1850,7 +1860,7 @@ setupChatMic("goals-chat-mic", "goals-chat-mic-label", "goals-chat-status", "goa
         const reply = await runVoiceConversationTurn(transcript);
         setStatus("Calixo is speaking…");
         if (reply) {
-          await speakText(reply, null, () => { resetIdle(); });
+          await speakText(reply, micBtn, () => { resetIdle(); });
         } else {
           resetIdle();
         }
