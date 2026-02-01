@@ -16,15 +16,16 @@ function getToday() {
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { diet: {}, activity: {}, goals: null };
+    if (!raw) return { diet: {}, activity: {}, goals: null, goalStory: "" };
     const data = JSON.parse(raw);
     return {
       diet: data.diet || {},
       activity: data.activity || {},
-      goals: data.goals || null
+      goals: data.goals || null,
+      goalStory: data.goalStory || ""
     };
   } catch {
-    return { diet: {}, activity: {}, goals: null };
+    return { diet: {}, activity: {}, goals: null, goalStory: "" };
   }
 }
 
@@ -33,17 +34,30 @@ function getGoals(data) {
   return {
     calorieGoal: g?.calorieGoal ?? DEFAULT_CALORIE_GOAL,
     proteinGoal: g?.proteinGoal ?? DEFAULT_PROTEIN_GOAL,
-    activityGoal: g?.activityGoal ?? DEFAULT_ACTIVITY_GOAL
+    activityGoal: g?.activityGoal ?? DEFAULT_ACTIVITY_GOAL,
+    goalStory: data.goalStory || ""
   };
 }
 
-function saveGoals(data, goals) {
+function saveGoals(data, goals, story = "") {
   data.goals = goals;
+  data.goalStory = story;
   saveData(data);
 }
 
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  fetch(`${API_BASE}/api/data`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      diet: data.diet || {}, 
+      activity: data.activity || {}, 
+      goals: data.goals ?? null,
+      goalStory: data.goalStory || ""
+    })
+  }).catch(() => {});
 }
 
 function getDietToday(data) {
@@ -414,7 +428,8 @@ function fetchSuggestions(data) {
   const payload = {
     dietEntries: dietEntries.map((e) => ({ name: e.name, calories: e.calories, protein: e.protein })),
     activityEntries: activityEntries.map((e) => ({ type: e.type, duration: e.duration, intensity: e.intensity })),
-    goals: { calorieGoal: goals.calorieGoal, proteinGoal: goals.proteinGoal, activityGoal: goals.activityGoal }
+    goals: { calorieGoal: goals.calorieGoal, proteinGoal: goals.proteinGoal, activityGoal: goals.activityGoal },
+    goalStory: goals.goalStory || ""
   };
   return fetch(`${API_BASE}/api/suggestions`, {
     method: "POST",
@@ -548,24 +563,56 @@ document.getElementById("refresh-suggestions").addEventListener("click", () => {
 
 function renderGoalsForm(data) {
   const goals = getGoals(data);
-  const cal = document.getElementById("goal-calories");
-  const pro = document.getElementById("goal-protein");
-  const act = document.getElementById("goal-activity");
-  if (cal) cal.value = goals.calorieGoal;
-  if (pro) pro.value = goals.proteinGoal;
-  if (act) act.value = goals.activityGoal;
+  const storyEl = document.getElementById("goal-story");
+  if (storyEl) storyEl.value = goals.goalStory || "";
+  
+  const preview = document.getElementById("analyzed-goals-preview");
+  if (preview && goals.calorieGoal !== DEFAULT_CALORIE_GOAL) {
+    preview.classList.remove("hidden");
+    document.getElementById("preview-calories").textContent = goals.calorieGoal;
+    document.getElementById("preview-protein").textContent = goals.proteinGoal;
+    document.getElementById("preview-activity").textContent = goals.activityGoal;
+  }
 }
 
-document.getElementById("goals-form").addEventListener("submit", (e) => {
+document.getElementById("goals-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const data = loadData();
-  saveGoals(data, {
-    calorieGoal: Number(document.getElementById("goal-calories").value) || DEFAULT_CALORIE_GOAL,
-    proteinGoal: Number(document.getElementById("goal-protein").value) || DEFAULT_PROTEIN_GOAL,
-    activityGoal: Number(document.getElementById("goal-activity").value) || DEFAULT_ACTIVITY_GOAL
-  });
-  refreshAll();
-  renderGoalsForm(loadData());
+  const storyEl = document.getElementById("goal-story");
+  const statusEl = document.getElementById("goals-status");
+  const submitBtn = document.getElementById("goals-submit-btn");
+  const story = storyEl.value.trim();
+
+  if (!story) {
+    statusEl.textContent = "Please tell us your fitness story.";
+    return;
+  }
+
+  statusEl.textContent = "AI is analyzing your story…";
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/analyze-goals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ story })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Analysis failed.");
+
+    const appData = loadData();
+    saveGoals(appData, {
+      calorieGoal: data.calorieGoal,
+      proteinGoal: data.proteinGoal,
+      activityGoal: data.activityGoal
+    }, story);
+
+    statusEl.textContent = "Goals updated successfully!";
+    refreshAll();
+  } catch (err) {
+    statusEl.textContent = "Error: " + err.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 
 const photoInput = document.getElementById("photo-input");
@@ -640,6 +687,24 @@ function refreshAll() {
   renderActivityEntries(data);
   renderSuggestions(data);
   renderGoalsForm(data);
+}
+
+function syncFromServer() {
+  fetch(`${API_BASE}/api/data`, { method: "GET", credentials: "include" })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((payload) => {
+      if (payload && (Object.keys(payload.diet || {}).length > 0 || Object.keys(payload.activity || {}).length > 0 || payload.goals != null)) {
+        const data = { 
+          diet: payload.diet || {}, 
+          activity: payload.activity || {}, 
+          goals: payload.goals ?? null,
+          goalStory: payload.goalStory || ""
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        refreshAll();
+      }
+    })
+    .catch(() => {});
 }
 
 /* ElevenLabs voice: read text aloud, with stop control */
@@ -740,6 +805,42 @@ document.getElementById("voice-dashboard-btn").addEventListener("click", () => {
       : `You have ${dietEntries.length} food entries and ${activityEntries.length} activity sessions.`
   ].join(" ");
   speakText(summary, document.getElementById("voice-dashboard-btn"));
+});
+
+document.getElementById("voice-briefing-btn").addEventListener("click", async () => {
+  const data = loadData();
+  const goals = getGoals(data);
+  const dietEntries = getDietToday(data);
+  const activityEntries = getActivityToday(data);
+  const btn = document.getElementById("voice-briefing-btn");
+  const labelEl = btn.querySelector(".btn-voice-label");
+
+  const origText = labelEl.textContent;
+  labelEl.textContent = "Analyzing…";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/coach-briefing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dietEntries,
+        activityEntries,
+        goals,
+        goalStory: goals.goalStory
+      })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Briefing failed.");
+    
+    await speakText(result.script, btn);
+  } catch (err) {
+    labelEl.textContent = "Error";
+    setTimeout(() => {
+      labelEl.textContent = origText;
+      btn.disabled = false;
+    }, 2000);
+  }
 });
 
 document.getElementById("voice-suggestions-btn").addEventListener("click", () => {
@@ -1019,3 +1120,4 @@ document.getElementById("speech-activity-btn").addEventListener("click", handleS
 
 initTabs();
 refreshAll();
+syncFromServer();

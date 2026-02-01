@@ -1,6 +1,6 @@
 # CalixOlympics
 
-Fitness app that tracks diet and activity, daily goals, and uses **OpenRouter** with **Google Gemini** for food nutrition (name + grams) and photo-based nutrition. **ElevenLabs** powers read-aloud voice for your dashboard and suggestions.
+Fitness app that tracks diet and activity, daily goals, and uses **OpenRouter** for food nutrition (name + grams), suggestions, voice-log parsing, and photo-based nutrition. Use any OpenRouter model (e.g. Gemini, or Snowflake Arctic when available). **ElevenLabs** powers read-aloud voice. Optional **MongoDB** + anonymous cookie syncs diet/activity/goals to the server (same browser = same data).
 
 ## Features
 
@@ -33,13 +33,12 @@ Fitness app that tracks diet and activity, daily goals, and uses **OpenRouter** 
 
 ## API keys (.env)
 
-- **OPENROUTER_API_KEY** – Used for:
-  - **Food nutrition** – Looking up calories and macros from food name + grams.
-  - **Photo food** – Vision model to analyze meal photos.
+- **OPENROUTER_API_KEY** – Used for food nutrition, suggestions, parse-speech, and **photo food** (vision). Required for AI features.
 - **ELEVENLABS_API_KEY** – Used for read-aloud voice (dashboard summary and suggestions). Optional: `ELEVENLABS_VOICE_ID` to change the voice.
+- **MONGODB_URI** (optional) – If set, diet/activity/goals are synced to MongoDB per anonymous cookie (one document per browser). If omitted, data stays in localStorage only.
 - Optional: `OPENROUTER_VISION_MODEL`, `OPENROUTER_CHAT_MODEL` (default: `google/gemini-2.0-flash-001` for both), `PORT`.
 
 ## APIs used
 
-- **OpenRouter** – Google Gemini 2.0 Flash for nutrition lookup (food name + grams → calories, protein, carbs, fat) and vision for photo food analysis. Same OpenRouter API key; you can override with other OpenRouter model IDs if desired.
+- **OpenRouter** – One API for nutrition lookup, suggestions, parse-speech, and vision (photo food). Use any model via `OPENROUTER_CHAT_MODEL` / `OPENROUTER_VISION_MODEL` (e.g. Gemini, or Snowflake Arctic when available on OpenRouter).
 - **ElevenLabs** – Text-to-speech for “Read summary” and “Read suggestions aloud.”

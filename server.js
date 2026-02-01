@@ -1,6 +1,6 @@
 /**
- * CalixOlympics API server – OpenRouter (Gemini) for food nutrition (name + grams) and photo analysis.
- * Set OPENROUTER_API_KEY in .env.
+ * CalixOlympics API server – OpenRouter for food nutrition, suggestions, parse-speech, and photo analysis.
+ * Optional MongoDB + anonymous cookie for persisting diet/activity/goals. Set OPENROUTER_API_KEY in .env.
  *
  * Run: node server.js  (or npm start)
  * Default port: 3000 (set PORT in .env to override)
@@ -9,8 +9,11 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const multer = require("multer");
 const path = require("path");
+const { MongoClient } = require("mongodb");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,22 +22,94 @@ const OPENROUTER_VISION_MODEL = process.env.OPENROUTER_VISION_MODEL || "google/g
 const OPENROUTER_CHAT_MODEL = process.env.OPENROUTER_CHAT_MODEL || "google/gemini-2.0-flash-001";
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+const MONGODB_URI = process.env.MONGODB_URI || "";
+const USE_MONGODB = MONGODB_URI.length > 0;
 
-app.use(cors());
+let db = null;
+if (USE_MONGODB) {
+  if (MONGODB_URI.startsWith("mongodb+srv://")) {
+    try {
+      require("dns").setServers(["8.8.8.8", "1.1.1.1"]);
+    } catch (_) {}
+  }
+  MongoClient.connect(MONGODB_URI)
+    .then((client) => {
+      db = client.db();
+      console.log("MongoDB connected.");
+    })
+    .catch((err) => {
+      console.error("MongoDB connection failed:", err.message);
+      db = null;
+    });
+}
+
+app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, ".")));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 if (!OPENROUTER_API_KEY) {
-  console.warn("OPENROUTER_API_KEY not set – food lookup and photo analysis will fail.");
+  console.warn("OPENROUTER_API_KEY not set – food lookup, suggestions, parse-speech, and photo analysis will fail.");
 }
 if (!ELEVENLABS_API_KEY) {
   console.warn("ELEVENLABS_API_KEY not set – read-aloud voice will be unavailable.");
 }
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, openrouter: !!OPENROUTER_API_KEY, elevenlabs: !!ELEVENLABS_API_KEY });
+  res.json({ ok: true, openrouter: !!OPENROUTER_API_KEY, elevenlabs: !!ELEVENLABS_API_KEY, mongodb: USE_MONGODB && !!db });
+});
+
+/* Anonymous cookie: ensure every request has an anon_id for MongoDB identity */
+function getOrCreateAnonId(req, res, next) {
+  let id = req.cookies?.anon_id;
+  if (!id) {
+    id = crypto.randomUUID();
+    res.cookie("anon_id", id, {
+      httpOnly: true,
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      sameSite: "lax"
+    });
+  }
+  req.anonId = id;
+  next();
+}
+
+/* GET /api/data – load diet, activity, goals for this anonymous user (MongoDB) */
+app.get("/api/data", getOrCreateAnonId, async (req, res) => {
+  if (!db) return res.status(503).json({ error: "MongoDB not configured. Set MONGODB_URI in .env to enable sync." });
+  try {
+    const col = db.collection("appdata");
+    const doc = await col.findOne({ _id: req.anonId });
+    res.json({
+      diet: doc?.diet || {},
+      activity: doc?.activity || {},
+      goals: doc?.goals ?? null,
+      goalStory: doc?.goalStory || ""
+    });
+  } catch (err) {
+    console.error("GET /api/data error:", err);
+    res.status(500).json({ error: err.message || "Failed to load data." });
+  }
+});
+
+/* PUT /api/data – save diet, activity, goals for this anonymous user (MongoDB) */
+app.put("/api/data", getOrCreateAnonId, async (req, res) => {
+  if (!db) return res.status(503).json({ error: "MongoDB not configured. Set MONGODB_URI in .env to enable sync." });
+  const { diet = {}, activity = {}, goals = null, goalStory = "" } = req.body || {};
+  try {
+    const col = db.collection("appdata");
+    await col.updateOne(
+      { _id: req.anonId },
+      { $set: { diet, activity, goals, goalStory, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("PUT /api/data error:", err);
+    res.status(500).json({ error: err.message || "Failed to save data." });
+  }
 });
 
 app.post("/api/text-to-speech", async (req, res) => {
@@ -159,7 +234,6 @@ app.post("/api/food-nutrition", async (req, res) => {
     return res.status(400).json({ error: "Provide either 'grams' (positive number) or 'quantity' (e.g. 1 cup, 2 eggs)." });
   }
 
-  const portionDesc = useGrams ? `exactly ${gramsNum} grams` : `portion: ${quantityStr}`;
   const prompt = useGrams
     ? `You are a nutrition expert. For exactly ${gramsNum} grams of "${name}", provide the estimated nutrition.
 Reply with ONLY this line (numbers only, no extra text):
@@ -202,7 +276,7 @@ Replace each X with the number. Use typical values for that food and portion siz
       fat
     });
   } catch (err) {
-    console.error("OpenRouter food-nutrition error:", err);
+    console.error("food-nutrition error:", err);
     res.status(500).json({ error: err.message || "Nutrition lookup failed." });
   }
 });
@@ -223,12 +297,12 @@ function callOpenRouter(messages, maxTokens = 500) {
   });
 }
 
-/* Gemini-powered smart suggestions from today's diet, activity, and goals */
+/* Smart suggestions from today's diet, activity, and goals (OpenRouter) */
 app.post("/api/suggestions", async (req, res) => {
   if (!OPENROUTER_API_KEY) {
     return res.status(503).json({ error: "OpenRouter API key not configured. Set OPENROUTER_API_KEY in .env" });
   }
-  const { dietEntries = [], activityEntries = [], goals = {} } = req.body;
+  const { dietEntries = [], activityEntries = [], goals = {}, goalStory = "" } = req.body;
   const calorieGoal = goals.calorieGoal ?? 2000;
   const proteinGoal = goals.proteinGoal ?? 50;
   const activityGoal = goals.activityGoal ?? 30;
@@ -243,19 +317,22 @@ app.post("/api/suggestions", async (req, res) => {
   const totalProtein = dietEntries.reduce((s, e) => s + (Number(e.protein) || 0), 0);
   const totalActiveMin = activityEntries.reduce((s, e) => s + (Number(e.duration) || 0), 0);
 
-  const prompt = `You are a friendly fitness and nutrition coach. Based on TODAY's data below, give 3 to 6 short, personalized suggestions. Be very specific:
+  const prompt = `You are a friendly fitness and nutrition coach. Based on the user's fitness story and TODAY's data below, give 3 to 6 short, personalized suggestions.
 
-FOR FOOD: Name specific foods and mention specific nutrients (not just "protein" or "calories"). Examples: "Have a handful of almonds for vitamin E and magnesium", "Add a cup of spinach for iron and folate", "Try Greek yogurt for calcium and probiotics", "Eat salmon for omega-3s and vitamin D", "A banana gives potassium and quick energy".
-FOR EXERCISE: Name specific exercises with reps, duration, or sets when relevant. Examples: "Do 20 minutes of brisk walking", "Try 3 sets of 10 bodyweight squats", "15 min jog at moderate pace", "10 min of stretching or yoga", "A 30 min bike ride".
+USER'S FITNESS STORY: "${goalStory}"
 
-Consider calories, protein, and activity goals. Use "success" for positive feedback, "warning" for something to improve, "info" for neutral tips.
+TODAY'S DATA:
+- Food: ${dietSummary}
+- Activity: ${activitySummary}
+- Totals: ${totalCal} cal, ${totalProtein}g protein, ${totalActiveMin} active minutes.
+- Targets: ${calorieGoal} cal, ${proteinGoal}g protein, ${activityGoal} min activity.
 
-Today's food: ${dietSummary}
-Today's activity: ${activitySummary}
-Totals: ${totalCal} cal, ${totalProtein}g protein, ${totalActiveMin} active minutes.
-Goals: ${calorieGoal} cal, ${proteinGoal}g protein, ${activityGoal} min activity.
+INSTRUCTIONS:
+1. Be ultra-specific. Name specific foods, nutrients, and exercises.
+2. Align suggestions with the user's fitness story. If they want to lose weight, suggest calorie-efficient, high-satiety foods. If they want to build muscle, focus on protein and resistance training.
+3. Use "success" for positive feedback, "warning" for improvements, "info" for neutral tips.
 
-Reply with ONLY a JSON array of objects. Each object: { "text": "one short, specific suggestion", "type": "success" or "warning" or "info" }. No other text.`;
+Reply with ONLY a JSON array of objects: [{ "text": "...", "type": "success|warning|info" }].`;
 
   try {
     const response = await callOpenRouter([{ role: "user", content: prompt }], 600);
@@ -350,6 +427,39 @@ Example output: [{"type":"walk","duration":30,"intensity":"moderate"}]`;
   }
 });
 
+app.post("/api/coach-briefing", async (req, res) => {
+  if (!OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: "OpenRouter API key not configured." });
+  }
+  const { dietEntries = [], activityEntries = [], goals = {}, goalStory = "" } = req.body;
+  
+  const dietSummary = dietEntries.map(e => `${e.name} (${e.calories} cal)`).join(", ");
+  const activitySummary = activityEntries.map(e => `${e.type} for ${e.duration} min`).join(", ");
+  const totalCal = dietEntries.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+  const totalActiveMin = activityEntries.reduce((s, e) => s + (Number(e.duration) || 0), 0);
+
+  const prompt = `You are a motivational fitness coach. Write a short, high-energy briefing (max 100 words) for the user based on their progress today.
+
+USER'S STORY: "${goalStory}"
+TODAY'S PROGRESS:
+- Food: ${dietSummary || "Nothing logged yet"}
+- Activity: ${activitySummary || "No activity yet"}
+- Totals: ${totalCal}/${goals.calorieGoal} cal, ${totalActiveMin}/${goals.activityGoal} min active.
+
+Provide a personalized, encouraging message that references their specific goals from their story. Keep it concise and ready to be read aloud.`;
+
+  try {
+    const response = await callOpenRouter([{ role: "user", content: prompt }], 250);
+    if (!response.ok) throw new Error("OpenRouter failed.");
+    const data = await response.json();
+    const script = (data.choices?.[0]?.message?.content || "").trim();
+    res.json({ script });
+  } catch (err) {
+    console.error("coach-briefing error:", err);
+    res.status(500).json({ error: "Failed to generate briefing." });
+  }
+});
+
 app.post("/api/analyze-food-image", upload.single("image"), async (req, res) => {
   if (!OPENROUTER_API_KEY) {
     return res.status(503).json({ error: "OpenRouter API key not configured. Set OPENROUTER_API_KEY in .env" });
@@ -406,6 +516,41 @@ Reply in a clear, short paragraph suitable for reading aloud. Include a one-line
   } catch (err) {
     console.error("OpenRouter Vision error:", err);
     res.status(500).json({ error: err.message || "Image analysis failed." });
+  }
+});
+
+app.post("/api/analyze-goals", async (req, res) => {
+  if (!OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: "OpenRouter API key not configured." });
+  }
+  const { story } = req.body;
+  if (!story) return res.status(400).json({ error: "Missing 'story'." });
+
+  const prompt = `You are a fitness and nutrition expert. Analyze the following user's fitness story and goals:
+"${story}"
+
+Based on this, extract or estimate the following daily targets:
+- calorieGoal (number)
+- proteinGoal (grams, number)
+- activityGoal (minutes, number)
+
+Reply with ONLY a JSON object: { "calorieGoal": X, "proteinGoal": X, "activityGoal": X }. No other text.`;
+
+  try {
+    const response = await callOpenRouter([{ role: "user", content: prompt }], 150);
+    if (!response.ok) throw new Error("OpenRouter request failed.");
+    const data = await response.json();
+    const content = (data.choices?.[0]?.message?.content || "").trim();
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+    res.json({
+      calorieGoal: Number(parsed.calorieGoal) || 2000,
+      proteinGoal: Number(parsed.proteinGoal) || 50,
+      activityGoal: Number(parsed.activityGoal) || 30
+    });
+  } catch (err) {
+    console.error("analyze-goals error:", err);
+    res.status(500).json({ error: "Failed to analyze goals." });
   }
 });
 
