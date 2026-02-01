@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitTrack – Diet & Activity</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-top">
+        <div>
+          <h1>FitTrack</h1>
+          <p class="tagline">Diet & activity in one place</p>
+        </div>
+        <button type="button" class="btn btn-stop-audio hidden" id="stop-audio-btn" title="Stop playback" aria-label="Stop playback">
+          <svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>
+          <span>Stop</span>
+        </button>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="nav-btn" data-tab="goals">Goals</button>
+        <button class="nav-btn" data-tab="diet">Log food</button>
+        <button class="nav-btn" data-tab="activity">Log activity</button>
+        <button class="nav-btn" data-tab="photo">Photo food</button>
+        <button class="nav-btn" data-tab="suggestions">Suggestions</button>
+      </nav>
+    </header>
+
+    <main class="main">
+      <section class="tab-panel active" id="dashboard">
+        <h2>Today’s overview</h2>
+        <div class="date-display" id="dashboard-date"></div>
+        <div class="daily-goal-banner" id="daily-goal-banner">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <h3>Today’s goal to reach</h3>
+            <button type="button" class="btn btn-voice" id="voice-dashboard-btn" title="Read today’s summary aloud">
+              <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+              <span class="btn-voice-label">Read summary</span>
+            </button>
+          </div>
+          <p id="daily-goal-text">Calories: 0 / 2000 · Protein: 0 / 50 g · Activity: 0 / 30 min</p>
+          <div class="goal-bars">
+            <div class="goal-bar-item">
+              <span class="goal-bar-label">Calories</span>
+              <div class="bar-wrap"><div class="bar" id="calories-bar"></div></div>
+            </div>
+            <div class="goal-bar-item">
+              <span class="goal-bar-label">Protein</span>
+              <div class="bar-wrap"><div class="bar protein-bar" id="protein-bar"></div></div>
+            </div>
+            <div class="goal-bar-item">
+              <span class="goal-bar-label">Activity</span>
+              <div class="bar-wrap"><div class="bar activity-bar" id="activity-bar"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card diet-card">
+            <h3>Diet</h3>
+            <div class="stat-row">
+              <span class="stat-label">Calories</span>
+              <span class="stat-value" id="dash-calories">0</span>
+              <span class="stat-target" id="dash-calories-target">/ 2000</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Protein (g)</span>
+              <span class="stat-value" id="dash-protein">0</span>
+              <span class="stat-target" id="dash-protein-target">/ 50</span>
+            </div>
+          </div>
+          <div class="card activity-card">
+            <h3>Activity</h3>
+            <div class="stat-row">
+              <span class="stat-label">Active minutes</span>
+              <span class="stat-value" id="dash-activity">0</span>
+              <span class="stat-target" id="dash-activity-target">/ 30</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Logged sessions</span>
+              <span class="stat-value activity-value" id="dash-sessions">0</span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Calories burned</span>
+              <span class="stat-value activity-value" id="dash-calories-burned">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="recent-section">
+          <h3>Recent entries</h3>
+          <ul class="recent-list" id="recent-list"></ul>
+        </div>
+        <div class="dashboard-suggestions">
+          <h3>Suggestions</h3>
+          <ul class="suggestions-list" id="dashboard-suggestions-list"></ul>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="goals">
+        <h2>Daily goals</h2>
+        <p class="goals-intro">Set what you want to reach each day. The app will track progress and remind you.</p>
+        <form class="form" id="goals-form">
+          <label>
+            <span>Calorie goal (per day)</span>
+            <input type="number" id="goal-calories" placeholder="e.g. 2000" min="500" max="5000" value="2000">
+          </label>
+          <label>
+            <span>Protein goal (grams per day)</span>
+            <input type="number" id="goal-protein" placeholder="e.g. 50" min="20" max="300" value="50">
+          </label>
+          <label>
+            <span>Activity goal (minutes per day)</span>
+            <input type="number" id="goal-activity" placeholder="e.g. 30" min="5" max="180" value="30">
+          </label>
+          <button type="submit" class="btn btn-primary">Save goals</button>
+        </form>
+      </section>
+
+      <section class="tab-panel" id="diet">
+        <h2>Log food</h2>
+        <p class="diet-intro">Enter the food name and amount (grams or quantity). Macros are looked up automatically.</p>
+        <form class="form" id="diet-form">
+          <label>
+            <span>Food name</span>
+            <input type="text" id="food-name" placeholder="e.g. chicken breast, rice, apple" required>
+          </label>
+          <label>
+            <span>Amount in</span>
+            <select id="food-amount-type" class="food-amount-type">
+              <option value="grams">Grams</option>
+              <option value="quantity">Quantity (e.g. 1 cup, 2 eggs)</option>
+            </select>
+          </label>
+          <label id="label-food-grams">
+            <span>Grams</span>
+            <input type="number" id="food-grams" placeholder="e.g. 150" min="1">
+          </label>
+          <label id="label-food-quantity" class="hidden">
+            <span>Quantity</span>
+            <input type="text" id="food-quantity" placeholder="e.g. 1 cup, 2 medium apples">
+          </label>
+          <p class="diet-status" id="diet-status"></p>
+          <button type="submit" class="btn btn-primary" id="diet-submit-btn">Look up & add</button>
+        </form>
+        <div class="voice-actions">
+          <button type="button" class="btn btn-voice" id="speech-food-btn" title="Speak to log food (e.g. I had rice, one cup, and chicken 200 grams)">
+            <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            <span class="btn-voice-label">Speak to log food</span>
+          </button>
+        </div>
+        <p class="voice-status" id="speech-food-status"></p>
+        <div class="today-entries">
+          <h3>Today’s food log</h3>
+          <ul class="entries-list" id="diet-entries"></ul>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="activity">
+        <h2>Log activity</h2>
+        <form class="form" id="activity-form">
+          <label>
+            <span>Activity type</span>
+            <select id="activity-type">
+              <option value="walk">Walking</option>
+              <option value="run">Running</option>
+              <option value="cycle">Cycling</option>
+              <option value="gym">Gym / weights</option>
+              <option value="sports">Sports</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Duration (minutes)</span>
+            <input type="number" id="activity-duration" placeholder="e.g. 30" min="1" required>
+          </label>
+          <label>
+            <span>Intensity</span>
+            <select id="activity-intensity">
+              <option value="light">Light</option>
+              <option value="moderate">Moderate</option>
+              <option value="vigorous">Vigorous</option>
+            </select>
+          </label>
+          <button type="submit" class="btn btn-primary">Add activity</button>
+        </form>
+        <div class="voice-actions">
+          <button type="button" class="btn btn-voice" id="speech-activity-btn" title="Speak to log activity (e.g. I walked 30 minutes)">
+            <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            <span class="btn-voice-label">Speak to log activity</span>
+          </button>
+        </div>
+        <p class="voice-status" id="speech-activity-status"></p>
+        <div class="today-entries">
+          <h3>Today’s activity log</h3>
+          <ul class="entries-list" id="activity-entries"></ul>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="photo">
+        <h2>Photo food</h2>
+        <p class="photo-intro">Upload a photo of your meal. We’ll detect what’s in it and read out the nutrition.</p>
+        <div class="photo-upload-zone" id="photo-upload-zone">
+          <input type="file" id="photo-input" accept="image/*" class="photo-input">
+          <p class="photo-upload-text">Drop an image here or click to choose</p>
+        </div>
+        <p class="photo-status" id="photo-status"></p>
+        <div class="photo-result hidden" id="photo-result">
+          <h3>Nutrition</h3>
+          <p class="photo-result-text" id="photo-result-text"></p>
+          <button type="button" class="btn btn-secondary" id="photo-add-log">Add to today’s log</button>
+        </div>
+        <p class="photo-note">Uses AI to estimate. For exact values, log food by name and grams.</p>
+      </section>
+
+      <section class="tab-panel" id="suggestions">
+        <h2>Suggestions</h2>
+        <p class="suggestions-intro">Based on your diet and activity today.</p>
+        <div class="voice-actions">
+          <button type="button" class="btn btn-voice" id="voice-suggestions-btn" title="Read suggestions aloud">
+            <svg class="icon-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            <span class="btn-voice-label">Read suggestions aloud</span>
+          </button>
+        </div>
+        <ul class="suggestions-list" id="suggestions-list"></ul>
+        <button class="btn btn-secondary" id="refresh-suggestions">Refresh</button>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

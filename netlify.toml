@@ -1,0 +1,11 @@
+# FitTrack – Netlify: static site + serverless API
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Rewrite /api/* to the single API function; :splat preserves path for Express routing
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
