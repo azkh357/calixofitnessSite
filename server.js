@@ -409,7 +409,7 @@ Reply in a clear, short paragraph suitable for reading aloud. Include a one-line
   }
 });
 
-// Only start the server when run directly (e.g. node server.js). When required by Netlify Function, we only export the app.
+// Start the server when run directly (e.g. node server.js).
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`FitTrack API running at http://localhost:${PORT}`);
